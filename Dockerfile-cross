@@ -1,0 +1,16 @@
+FROM asymprobe
+
+# Cross-compilation toolchains (default + gcc-14 per arch)
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu    gcc-14-aarch64-linux-gnu \
+    gcc-arm-linux-gnueabi    gcc-14-arm-linux-gnueabi \
+    gcc-mips-linux-gnu       gcc-14-mips-linux-gnu \
+    gcc-mips64-linux-gnuabi64 gcc-14-mips64-linux-gnuabi64 \
+    gcc-powerpc64-linux-gnu  gcc-14-powerpc64-linux-gnu \
+    gcc-riscv64-linux-gnu    gcc-14-riscv64-linux-gnu \
+    gcc-m68k-linux-gnu       gcc-14-m68k-linux-gnu \
+    gcc-sparc64-linux-gnu    gcc-14-sparc64-linux-gnu \
+    gcc-s390x-linux-gnu      gcc-14-s390x-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace

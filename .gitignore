@@ -1,0 +1,6 @@
+*.s
+*.txt
+*.o
+*.i
+dataset
+output

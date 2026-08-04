@@ -1,0 +1,14 @@
+FROM asymprobe:gcc-15
+
+# Cross-compilation toolchains (default + gcc-15 per arch)
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu    gcc-15-aarch64-linux-gnu \
+    gcc-arm-linux-gnueabi    gcc-15-arm-linux-gnueabi \
+    gcc-powerpc64-linux-gnu  gcc-15-powerpc64-linux-gnu \
+    gcc-riscv64-linux-gnu    gcc-15-riscv64-linux-gnu \
+    gcc-m68k-linux-gnu       gcc-15-m68k-linux-gnu \
+    gcc-sparc64-linux-gnu    gcc-15-sparc64-linux-gnu \
+    gcc-s390x-linux-gnu      gcc-15-s390x-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
