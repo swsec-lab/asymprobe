@@ -2,7 +2,7 @@
 
 ASymProbe is a tool for probing assembly symbol ambiguity across multiple architectures.
 
-This repository provides the artifact for reproducing the main results of our paper, accepted at NDSS 2027. The artifact is designed to run inside Docker containers to simplify dependency management and improve reproducibility.
+This repository provides the artifact for reproducing the main results of our paper, *"Capture The Flag: Exploiting Compilation Flags to Summon Trojan Horses,"* accepted at NDSS 2027. The artifact is designed to run inside Docker containers to simplify dependency management and improve reproducibility.
 
 ## Prerequisites
 
