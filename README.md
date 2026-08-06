@@ -35,7 +35,7 @@ make docker-build
 
 **Notes.**
 
-- Building all Docker images is expected to take approximately 1--2 hours, depending on the host machine and network conditions.
+- Building all Docker images is expected to take approximately 1-2 hours, depending on the host machine and network conditions.
 - Separate Docker images are used to avoid library conflicts between the x86 toolchain and cross-compilers.
 - GCC 15 is not available on Ubuntu 24.04. The `gcc-15` and `gcc-15-cross` images are based on Ubuntu 25.10.
 
@@ -47,7 +47,7 @@ This section describes how to reproduce the main ambiguity results for the archi
 
 The preprocessing step compiles the dataset and collects generated assembly files. It then extracts instruction templates used by ASymProbe.
 
-This step applies the compilation options described in Section 4.1.1 of the paper. It is expected to take approximately 2--4 hours.
+This step applies the compilation options described in Section 4.1.1 of the paper. It is expected to take approximately 2-4 hours.
 
 This step is optional because pre-generated template files are already included in the `template/` directory.
 
@@ -78,7 +78,7 @@ This command performs the following tasks:
 
 This step runs ASymProbe to find ambiguity bugs by mutating the template files. ASymProbe replaces placeholders in each template with reserved symbols and compiles the resulting test cases to detect the build errors and miscompilations, as described in Sections 4.1.2 and 4.1.3 of the paper.
 
-This step is expected to take approximately 20--40 minutes.
+This step is expected to take approximately 20-40 minutes.
 
 ASymProbe uses the symbol file `symbols.txt` and the template files in the `templates/` directory.
 
@@ -88,7 +88,7 @@ To run the main experiments, execute:
 make docker-fast
 ```
 
-The experiments are executed inside Docker containers using the corresponding compilers. Detected ambiguity bugs are stored under the output/ directory.
+The experiments are executed inside Docker containers using the corresponding compilers. Compiled test-case binaries are stored under the `output/` directory, and per-symbol ambiguity results are written to the `report/` directory as `report_<arch>_<compiler>.txt` files, each line recording the architecture, compiler, syntax, error type (`E1` = miscompilation, `E2` = build error), and symbol.
 
 
 ### 2.3. Summarizing Ambiguity Results
@@ -99,7 +99,42 @@ To summarize the results and generate the data corresponding to Table 1 and Tabl
 make docker-triage
 ```
 
-This step processes the files in the `output/` directory and writes the summarized ambiguity cases to the `bugs/` directory.
+This step processes the files in the `report/` directory and writes the summarized ambiguity cases to the `bugs/` directory. It also prints a per-compiler breakdown of ambiguous symbol counts by register category (16-bit, 32-bit, ..., etc.) to the console, once for each architecture/syntax, e.g.:
+
+```text
+Bugs will be collected in: <current-directory>/bugs
+compiler    16bit    32bit   128bit   256bit   512bit  Special      etc    total
+--------------------------------------------------------------------------------
+clang-14        8        8        8        8        8        1                41
+clang-15        8        8        8        8        8        1                41
+clang-16        8        8        8        8        8        1                41
+clang-17        8        8        8        8        8        1                41
+clang-18        8        8        8        8        8        1                41
+clang-19        8        8        8        8        8        1        1       42
+clang-20        8        8        8        8        8        1        1       42
+clang-21        8        8        8        8        8        1        1       42
+clang-22        8        8        8        8        8        1        1       42
+gcc-14          8        8                                           15       31
+gcc-15          8        8                         24                15       55
+--------------------------------------------------------------------------------
+total          88       88       72       72       96        9       34      459
+Bugs will be collected in: <current-directory>/bugs
+compiler    16bit    32bit    64bit   128bit   256bit   512bit       PC  Special      etc    total
+--------------------------------------------------------------------------------------------------
+clang-14                16       16       32       32       32        1        1        1      131
+clang-15                16       16       32       32       32        1        2        1      132
+clang-16                16       16       32       32       32        1        2        1      132
+clang-17                16       16       32       32       32        1        2        1      132
+clang-18                32       32       32       32       32        1        2        1      164
+clang-19                32       32       32       32       32        1        2        2      165
+clang-20                32       32       32       32       32        1        2        2      165
+clang-21                32       32       32       32       32        1        2        2      165
+clang-22                32       32       32       32       32        1        2        2      165
+gcc-14         32                32                                                    15       79
+gcc-15         32                32                                                    15       79
+--------------------------------------------------------------------------------------------------
+total          64      224      288      288      288      288        9       17       43     1509
+```
 
 Expected runtime: approximately 5 minutes.
 
@@ -187,46 +222,82 @@ Write: 4096 bytes
 The illegal-instruction behavior in `case3_gcc` is expected.
 
 
-## 4. Reproducing the Full Results *[Optional]*
+## 4. Reproducing the Patch Experiment
+
+This section describes how to validate the proposed mitigation, which wraps each symbol in double quotes (`SYMBOL` → `"symbol"`) to disambiguate it from instruction mnemonics and registers.
+
+To run the patch experiment for the fast-path architectures (x86, x86-64, aarch64), execute:
+
+```bash
+make docker-patch
+```
+
+This command re-runs the ASymProbe probing process with the `-patch` flag applied and stores results under `output-patch/` and `report-patch/` instead of `output/` and `report/`.
+
+Expected runtime: approximately 20--40 minutes, comparable to Section 2.2.
+
+To summarize the patch results, run:
+
+```bash
+make docker-triage-patch
+```
+
+This step processes the files in the `report-patch/` directory and writes the summarized cases to the `bugs-patch/` directory, the patched counterparts of `report/` and `bugs/` from Section 2. Since quoting symbols resolves the ambiguity bugs detected in Section 2, no ambiguity is expected to remain, and the command should print `No ambiguity bugs found.` for each architecture/compiler combination, e.g.:
+
+```text
+$ make docker-triage-patch
+...
+No ambiguity bugs found.
+No ambiguity bugs found.
+...
+```
+
+## 5. Reproducing the Full Results *[Optional]*
 
 This section describes how to reproduce the full evaluation over all 119 architecture/compiler/syntax combinations reported in the paper.
 
 This process is optional and may take more than one day.
 
-### 4.1. Preprocessing
+### 5.1. Preprocessing
 
 ```bash
+make docker-build
 make setup
-make docker-build-all
+make docker-preprocess-all
 ```
 
-### 4.2. Running ASymProbe
+### 5.2. Running ASymProbe
 
 ```bash
 make docker-all
 ```
 
-### 4.3. Summarizing Results
+### 5.3. Summarizing Results
 
 ```bash
 make docker-triage-all
 ```
 
-## 5. Output Directories
+## 6. Output Directories
 
 The main output directories are:
 
-| Directory        | Description                                               |
-| ---------------- | --------------------------------------------------------- |
-| `template/`      | Instruction templates used by ASymProbe                   |
-| `dataset/build/` | Intermediate build outputs generated during preprocessing |
-| `output/`        | Raw ambiguity detection results                           |
-| `bugs/`          | Summarized ambiguity cases used for the paper tables      |
-| `examples/`      | Example programs discussed in the paper                   |
+| Directory         | Description                                                                  |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `template/`        | Instruction templates used by ASymProbe                                     |
+| `dataset/build/`   | Intermediate build outputs generated during preprocessing                   |
+| `output/`          | Compiled test-case binaries generated during probing                        |
+| `report/`          | Raw per-symbol ambiguity results (see Section 2.2)                          |
+| `output-patch/`, `report-patch/` | Same as above, generated when running the patch experiment (Section 4) |
+| `bugs/`            | Summarized ambiguity cases used for the paper tables                        |
+| `bugs-patch/`       | Summarized cases after the patch (Section 4); empty if the patch resolves all ambiguities |
+| `examples/`        | Example programs discussed in the paper                                     |
 
-## 6. Artifact Notes
+## 7. Artifact Notes
 
 - The artifact is intended to be executed through Docker.
 - Pre-generated templates are included to reduce reproduction time.
-- The fast path reproduces the main ambiguity results for the architectures where ambiguity was observed.
-- The full path reproduces all 119 combinations evaluated in the paper.
+- Section 2 reproduces the main ambiguity results for the architectures where ambiguity was observed.
+- Section 5 (optional) reproduces all 119 combinations evaluated in the paper.
+- The example programs (Section 3) demonstrate the real-world security impact of the detected ambiguities.
+- The patch experiment (Section 4) validates the proposed mitigation for the detected ambiguities.
