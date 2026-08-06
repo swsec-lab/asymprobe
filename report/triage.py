@@ -55,7 +55,10 @@ def main():
                     total[arch][compiler][error_type] += cnt
 
     if len(args.report_files) > 1:
-        print_summary(total, 'TOTAL')
+        if total:
+            print_summary(total, 'TOTAL')
+    else:
+        print('No ambiguity bugs found.')
 
 
 if __name__ == '__main__':

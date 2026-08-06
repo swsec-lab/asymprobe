@@ -20,9 +20,9 @@ def parse_report(filename):
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def make_paths(arch, compiler, syntax, symbol):
+def make_paths(arch, compiler, syntax, symbol, src_dir):
     arch_dir = f'{arch}_{syntax}' if syntax != 'None' else arch
-    base = os.path.join(_SCRIPT_DIR, '..', 'output', arch_dir, compiler)
+    base = os.path.join(src_dir, arch_dir, compiler)
     asm = os.path.join(base, f'{symbol}.s')
     obj = os.path.join(base, f'{symbol}.o')
     gt  = os.path.join(base, 'ground_truth.o')
@@ -93,7 +93,7 @@ def save_bug_report(arch, compiler, syntax, symbol, content, output_dir):
         f.write(content + '\n')
 
 
-def triage_report(report_file, output_dir):
+def triage_report(report_file, output_dir, src_dir):
     try:
         entries = parse_report(report_file)
     except FileNotFoundError:
@@ -102,7 +102,7 @@ def triage_report(report_file, output_dir):
 
     processed = skipped = 0
     for arch, compiler, syntax, _, symbol in entries:
-        asm, obj, gt = make_paths(arch, compiler, syntax, symbol)
+        asm, obj, gt = make_paths(arch, compiler, syntax, symbol, src_dir)
 
         obj_lines = objdump(obj)
         gt_lines  = objdump(gt)
@@ -130,12 +130,19 @@ def main():
     parser.add_argument('report_files', nargs='+', help='Report file(s) (e.g. report_x86-64_gcc-12.txt)')
     parser.add_argument('-o', '--output-dir', default=os.path.join(_SCRIPT_DIR, '..', 'bugs'),
                         help='Output directory for bug reports (default: bugs/)')
+    parser.add_argument('-s', '--src-dir', default=os.path.join(_SCRIPT_DIR, '..', 'output'),
+                        help='Base directory containing compiled <arch>/ binaries (default: output/)')
     args = parser.parse_args()
+
+    report_files = [f for f in args.report_files if os.path.isfile(f)]
+    if not report_files:
+        print('No ambiguity bugs found.')
+        return
 
     print(f"Bugs will be collected in: {os.path.realpath(args.output_dir)}")
     total_processed = total_skipped = 0
-    for report_file in args.report_files:
-        processed, skipped = triage_report(report_file, args.output_dir)
+    for report_file in report_files:
+        processed, skipped = triage_report(report_file, args.output_dir, args.src_dir)
         total_processed += processed
         total_skipped   += skipped
 
