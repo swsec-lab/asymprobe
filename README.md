@@ -41,46 +41,15 @@ make docker-build
 
 ## 2. Reproducing the Main Results
 
-This section describes how to reproduce the main ambiguity results for the architectures where ambiguity was observed: x86 Intel syntax, x86-64 Intel syntax, and aarch64.
+This section describes how to reproduce the main ambiguity results for the architectures where ambiguity was observed: x86 Intel syntax, x86-64 Intel syntax, and aarch64, using the pre-generated instruction templates already included in the `template/` directory. See [Section 5](#5-reproducing-the-full-results-optional) to regenerate the templates from scratch.
 
-### 2.1. Preprocessing *[Optional]*
+### 2.1. Running ASymProbe
 
-The preprocessing step compiles the dataset and collects generated assembly files. It then extracts instruction templates used by ASymProbe.
-
-This step applies the compilation options described in Section 4.1.1 of the paper. It is expected to take approximately 2-4 hours.
-
-This step is optional because pre-generated template files are already included in the `template/` directory.
-
-#### 2.1.1. Extract the Dataset
-
-The preprocessing step uses Coreutils 9.7. To extract `coreutils-9.7.tar.gz` under the `dataset/` directory, run:
-
-```bash
-make setup
-```
-
-#### 2.1.2. Run Preprocessing
-
-To run preprocessing, execute:
-
-```bash
-make docker-preprocess
-```
-
-This command performs the following tasks:
-
-- Compiles Coreutils using `dataset/build_coreutils.py`
-- Stores intermediate build outputs under `dataset/build/`
-- Extracts instruction templates using `dataset/extract_instruction.py`
-- Writes generated templates to the `templates/` directory
-
-### 2.2. Running ASymProbe
-
-This step runs ASymProbe to find ambiguity bugs by mutating the template files. ASymProbe replaces placeholders in each template with reserved symbols and compiles the resulting test cases to detect the build errors and miscompilations, as described in Sections 4.1.2 and 4.1.3 of the paper.
+This step runs ASymProbe to find ambiguity bugs by mutating the template files. ASymProbe replaces placeholders in each template with reserved symbols and compiles the resulting test cases to detect the build errors and miscompilations, as described in Sections IV.B of the paper.
 
 This step is expected to take approximately 20-40 minutes.
 
-ASymProbe uses the symbol file `symbols.txt` and the template files in the `templates/` directory.
+ASymProbe uses the symbol file `symbols.txt` and the template files in the `template/` directory.
 
 To run the main experiments, execute:
 
@@ -91,7 +60,7 @@ make docker-fast
 The experiments are executed inside Docker containers using the corresponding compilers. Compiled test-case binaries are stored under the `output/` directory, and per-symbol ambiguity results are written to the `report/` directory as `report_<arch>_<compiler>.txt` files, each line recording the architecture, compiler, syntax, error type (`E1` = miscompilation, `E2` = build error), and symbol.
 
 
-### 2.3. Summarizing Ambiguity Results
+### 2.2. Summarizing Ambiguity Results
 
 To summarize the results and generate the data corresponding to Table 1 and Table 4 in the paper, run:
 
@@ -234,7 +203,7 @@ make docker-patch
 
 This command re-runs the ASymProbe probing process with the `-patch` flag applied and stores results under `output-patch/` and `report-patch/` instead of `output/` and `report/`.
 
-Expected runtime: approximately 20--40 minutes, comparable to Section 2.2.
+Expected runtime: approximately 20--40 minutes, comparable to [Section 2.1](#21-running-asymprobe).
 
 To summarize the patch results, run:
 
@@ -242,7 +211,7 @@ To summarize the patch results, run:
 make docker-triage-patch
 ```
 
-This step processes the files in the `report-patch/` directory and writes the summarized cases to the `bugs-patch/` directory, the patched counterparts of `report/` and `bugs/` from Section 2. Since quoting symbols resolves the ambiguity bugs detected in Section 2, no ambiguity is expected to remain, and the command should print `No ambiguity bugs found.` for each architecture/compiler combination, e.g.:
+This step processes the files in the `report-patch/` directory and writes the summarized cases to the `bugs-patch/` directory, the patched counterparts of `report/` and `bugs/` from [Section 2](#2-reproducing-the-main-results). Since quoting symbols resolves the ambiguity bugs detected in [Section 2](#2-reproducing-the-main-results), no ambiguity is expected to remain, and the command should print `No ambiguity bugs found.` for each architecture/compiler combination, e.g.:
 
 ```text
 $ make docker-triage-patch
@@ -260,11 +229,21 @@ This process is optional and may take more than one day.
 
 ### 5.1. Preprocessing
 
+The preprocessing step compiles the dataset and collects generated assembly files for all 11 architectures and both syntaxes (Intel, AT&T) for x86/x86-64. It then extracts the instruction templates used by ASymProbe, applying the compilation options described in Section IV.A of the paper.
+
+This step is expected to take approximately 8-12 hours.
+
 ```bash
-make docker-build
-make setup
 make docker-preprocess-all
 ```
+
+This command performs the following tasks:
+
+- Extracts `coreutils-9.7.tar.gz` under the `dataset/` directory
+- Compiles Coreutils using `dataset/build_coreutils.py`
+- Stores intermediate build outputs under `dataset/build/`
+- Extracts instruction templates using `dataset/extract_instruction.py`
+- Writes generated templates to the `template/` directory
 
 ### 5.2. Running ASymProbe
 
@@ -287,17 +266,17 @@ The main output directories are:
 | `template/`        | Instruction templates used by ASymProbe                                     |
 | `dataset/build/`   | Intermediate build outputs generated during preprocessing                   |
 | `output/`          | Compiled test-case binaries generated during probing                        |
-| `report/`          | Raw per-symbol ambiguity results (see Section 2.2)                          |
-| `output-patch/`, `report-patch/` | Same as above, generated when running the patch experiment (Section 4) |
+| `report/`          | Raw per-symbol ambiguity results (see [Section 2.1](#21-running-asymprobe))                          |
+| `output-patch/`, `report-patch/` | Same as above, generated when running the patch experiment ([Section 4](#4-reproducing-the-patch-experiment)) |
 | `bugs/`            | Summarized ambiguity cases used for the paper tables                        |
-| `bugs-patch/`       | Summarized cases after the patch (Section 4); empty if the patch resolves all ambiguities |
+| `bugs-patch/`       | Summarized cases after the patch ([Section 4](#4-reproducing-the-patch-experiment)); empty if the patch resolves all ambiguities |
 | `examples/`        | Example programs discussed in the paper                                     |
 
 ## 7. Artifact Notes
 
 - The artifact is intended to be executed through Docker.
 - Pre-generated templates are included to reduce reproduction time.
-- Section 2 reproduces the main ambiguity results for the architectures where ambiguity was observed.
-- Section 5 (optional) reproduces all 119 combinations evaluated in the paper.
-- The example programs (Section 3) demonstrate the real-world security impact of the detected ambiguities.
-- The patch experiment (Section 4) validates the proposed mitigation for the detected ambiguities.
+- [Section 2](#2-reproducing-the-main-results) reproduces the main ambiguity results for the architectures where ambiguity was observed.
+- [Section 5](#5-reproducing-the-full-results-optional) (optional) regenerates the instruction templates from scratch and reproduces all 119 combinations evaluated in the paper.
+- The example programs ([Section 3](#3-reproducing-example-programs)) demonstrate the real-world security impact of the detected ambiguities.
+- The patch experiment ([Section 4](#4-reproducing-the-patch-experiment)) validates the proposed mitigation for the detected ambiguities.
