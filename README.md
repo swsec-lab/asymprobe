@@ -122,6 +122,56 @@ bugs/
 
 Each `.txt` file contains example code snippets that trigger ambiguity for the corresponding architecture, compiler, and symbol.
 
+### 2.3. Reproducing the Vector Register Miscompilations (Table V)
+
+[Section 2.2](#22-summarizing-ambiguity-results) reports *how many* symbols are ambiguous. This step reproduces Table V of the paper, which reports *what each ambiguous symbol is silently miscompiled into*: a program symbol named after a vector register (`xmm0`-`xmm31`, `ymm0`-`ymm31`, `zmm0`-`zmm31`) is consumed by the assembler as a register operand, so the memory access the source asked for is replaced by a general-purpose register with no diagnostic.
+
+The experiment in `experiments/vector_reg_symbol/` narrows the scope to a single instruction over the 96 vector register names, assembles it with every compiler for x86 and x86-64, and pairs each miscompiled source line with the disassembly it actually produced.
+
+To run it together with the other experiments:
+
+```bash
+cd experiments/
+make
+```
+
+Expected runtime: under a minute.
+
+The run writes two kinds of output under `experiments/vector_reg_symbol/results/`:
+
+| Output                          | Description                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `listing_<arch>_<compiler>.s`   | Every miscompiled source line followed by the disassembly it produced, in Intel syntax           |
+| `summary.txt`                   | Table V: one table per architecture, a row per register index and a column per compiler          |
+
+`summary.txt` is also printed to the console. Both tables, abridged to five rows and four of the eleven compiler columns, are:
+
+```text
+x86
+128/256/512-bit
+Register Names     clang-14     ...  clang-22     gcc-14  gcc-15
+-----------------  -----------       -----------  ------  ---------
+xmm0/ymm0/zmm0     eax/eax/eax  ...  eax/eax/eax  -/-/-   -/-/-
+xmm4/ymm4/zmm4     eiz/eiz/eiz  ...  eiz/eiz/eiz  -/-/-   -/-/-
+xmm7/ymm7/zmm7     edi/edi/edi  ...  edi/edi/edi  -/-/-   -/-/-
+xmm8/ymm8/zmm8     -/-/-        ...  -/-/-        -/-/-   -/-/(bad)
+xmm31/ymm31/zmm31  -/-/-        ...  -/-/-        -/-/-   -/-/(bad)
+
+x86-64
+128/256/512-bit
+Register Names     clang-14     ...  clang-18     ...  gcc-14  gcc-15
+-----------------  -----------       -----------       ------  ------
+xmm0/ymm0/zmm0     rax/rax/rax  ...  rax/rax/rax  ...  -/-/-   -/-/-
+xmm4/ymm4/zmm4     0/0/0        ...  0/0/0        ...  -/-/-   -/-/-
+xmm7/ymm7/zmm7     rdi/rdi/rdi  ...  rdi/rdi/rdi  ...  -/-/-   -/-/-
+xmm16/ymm16/zmm16  rax/rax/rax  ...  r16/r16/r16  ...  -/-/-   -/-/-
+xmm31/ymm31/zmm31  r15/r15/r15  ...  r31/r31/r31  ...  -/-/-   -/-/-
+```
+
+Each cell gives what `xmmN`, `ymmN` and `zmmN` were miscompiled into. A `-` means the name was not miscompiled. `(bad)` marks bytes that objdump could not decode (illegal instruction).
+
+See `experiments/vector_reg_symbol/README.md` for the experiment design, the per-compiler miscompiled/correct/rejected counts, and a discussion of the results.
+
 ## 3. Reproducing Example Programs
 
 The example programs discussed in the paper are provided under the `examples/` directory. Each example has its own subdirectory and Makefile.
@@ -271,6 +321,7 @@ The main output directories are:
 | `bugs/`            | Summarized ambiguity cases used for the paper tables                        |
 | `bugs-patch/`       | Summarized cases after the patch ([Section 4](#4-reproducing-the-patch-experiment)); empty if the patch resolves all ambiguities |
 | `examples/`        | Example programs discussed in the paper                                     |
+| `experiments/vector_reg_symbol/` | Vector register miscompilation results, Table V ([Section 2.3](#23-reproducing-the-vector-register-miscompilations-table-v)) |
 
 ## 7. Artifact Notes
 
