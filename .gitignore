@@ -5,6 +5,7 @@
 __pycache__/
 dataset
 output
+examples
 experiments/*/results/
 experiments/*/work/
 !experiments/vector_reg_symbol/template.s
