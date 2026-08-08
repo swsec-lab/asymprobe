@@ -62,7 +62,7 @@ The experiments are executed inside Docker containers using the corresponding co
 
 ### 2.2. Summarizing Ambiguity Results
 
-To summarize the results and generate the data corresponding to Table 1 and Table 4 in the paper, run:
+To summarize the results and generate the data corresponding to Table I and Table IV in the paper, run:
 
 ```bash
 make docker-triage
@@ -71,6 +71,34 @@ make docker-triage
 This step processes the files in the `report/` directory and writes the summarized ambiguity cases to the `bugs/` directory. It also prints a per-compiler breakdown of ambiguous symbol counts by register category (16-bit, 32-bit, ..., etc.) to the console, once for each architecture/syntax, e.g.:
 
 ```text
+[aarch64]
+  Compiler     Miscompile Build Error   Total
+---------------------------------------------
+  clang-14             0       276     276
+  clang-15             0       276     276
+  clang-16             0       279     279
+  clang-17             0       279     279
+  clang-18             0       279     279
+  clang-19             0       267     267
+  clang-20             0       267     267
+  clang-21             0       267     267
+  clang-22             0       267     267
+
+[x86]
+  Compiler     Miscompile Build Error   Total
+---------------------------------------------
+  clang-14            41       238     279
+  clang-15            41       238     279
+  clang-16            41       240     281
+  clang-17            41       240     281
+  clang-18            41       304     345
+  clang-19            42       303     345
+  clang-20            42       303     345
+  clang-21            42       303     345
+  clang-22            42       303     345
+  gcc-14              31       129     160
+  gcc-15              55       101     156
+
 Bugs will be collected in: <current-directory>/bugs
 compiler    16bit    32bit   128bit   256bit   512bit  Special      etc    total
 --------------------------------------------------------------------------------
@@ -87,6 +115,22 @@ gcc-14          8        8                                           15       31
 gcc-15          8        8                         24                15       55
 --------------------------------------------------------------------------------
 total          88       88       72       72       96        9       34      459
+
+[x86-64]
+  Compiler     Miscompile Build Error   Total
+---------------------------------------------
+  clang-14           131       148     279
+  clang-15           132       147     279
+  clang-16           132       149     281
+  clang-17           132       149     281
+  clang-18           164       181     345
+  clang-19           165       180     345
+  clang-20           165       180     345
+  clang-21           165       180     345
+  clang-22           165       180     345
+  gcc-14              79       259     338
+  gcc-15              79       255     334
+
 Bugs will be collected in: <current-directory>/bugs
 compiler    16bit    32bit    64bit   128bit   256bit   512bit       PC  Special      etc    total
 --------------------------------------------------------------------------------------------------
@@ -122,7 +166,7 @@ bugs/
 
 Each `.txt` file contains example code snippets that trigger ambiguity for the corresponding architecture, compiler, and symbol.
 
-### 2.3. Reproducing the Vector Register Miscompilations (Table V)
+### 2.3. Reproducing the Vector Register Miscompilations 
 
 [Section 2.2](#22-summarizing-ambiguity-results) reports *how many* symbols are ambiguous. This step reproduces Table V of the paper, which reports *what each ambiguous symbol is silently miscompiled into*: a program symbol named after a vector register (`xmm0`-`xmm31`, `ymm0`-`ymm31`, `zmm0`-`zmm31`) is consumed by the assembler as a register operand, so the memory access the source asked for is replaced by a general-purpose register with no diagnostic.
 
