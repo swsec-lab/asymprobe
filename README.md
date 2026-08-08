@@ -181,11 +181,12 @@ make
 
 Expected runtime: under a minute.
 
-The run writes two kinds of output under `experiments/vector_reg_symbol/results/`:
+The run writes three kinds of output under `experiments/vector_reg_symbol/results/`:
 
 | Output                          | Description                                                                                      |
 | ------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `listing_<arch>_<compiler>.s`   | Every miscompiled source line followed by the disassembly it produced, in Intel syntax           |
+| `object_<arch>_<compiler>.o`    | The assembled object each listing was read from, so the disassembly can be re-derived            |
 | `summary.txt`                   | Table V: one table per architecture, a row per register index and a column per compiler          |
 
 `summary.txt` is also printed to the console. Both tables, abridged to five rows and four of the eleven compiler columns, are:

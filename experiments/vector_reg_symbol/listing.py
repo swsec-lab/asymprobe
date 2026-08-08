@@ -9,7 +9,8 @@ the miscompilation of each line can be read off directly.
 An assembler that rejects a line would abort the whole file, so rejected lines are
 commented out and the file is retried until it assembles. Only miscompiled lines are
 reported, each written back as source with its disassembly in a trailing comment, so
-the listing is itself reassemblable.
+the listing is itself reassemblable. The object each listing was read from is kept
+alongside it, so the disassembly can be re-derived from the artifact.
 """
 import argparse
 import os
@@ -127,6 +128,18 @@ def disassemble_by_label(obj, cwd):
     return blocks
 
 
+def save_object(work_dir, obj_path, keep):
+    """Keep the assembled object beside its listing, or clear a stale one.
+
+    Nothing is kept when the template never assembled, so an object left by an
+    earlier run cannot sit next to a listing it no longer backs.
+    """
+    if keep:
+        shutil.copyfile(os.path.join(work_dir, 'template.o'), obj_path)
+    elif os.path.exists(obj_path):
+        os.remove(obj_path)
+
+
 def run(arch, compiler, lines, insns, work_root, results_dir):
     compiler_cmd = _ARCH_COMPILER_MAP[arch][compiler]
     if not shutil.which(compiler_cmd[0]):
@@ -154,12 +167,14 @@ def run(arch, compiler, lines, insns, work_root, results_dir):
         dropped |= fresh
 
     path = os.path.join(results_dir, f'listing_{arch}_{compiler}.s')
+    obj_path = os.path.join(results_dir, f'object_{arch}_{compiler}.o')
     # carry the template's own directives over, so the listing assembles the same way
     preamble = [line for line in lines if line.strip().startswith('.')]
 
     if gave_up:
         with open(path, 'w') as f:
             f.write('\n'.join(preamble) + '\n')
+        save_object(work_dir, obj_path, keep=False)  # nothing assembled
         shutil.rmtree(work_dir, ignore_errors=True)
         print(f'  {arch:<7} {compiler:<9} {os.path.basename(path)}  '
               f'(template did not assemble)')
@@ -186,6 +201,12 @@ def run(arch, compiler, lines, insns, work_root, results_dir):
     # the listing is itself assembly: the directives make it reassemblable as-is
     with open(path, 'w') as f:
         f.write('\n'.join(preamble + rows) + '\n')
+    # the object the rows above were read from, kept so they can be re-derived; it
+    # is the object of the *assembled* template -- labels inserted, rejected lines
+    # commented out -- not of the listing, which holds only the miscompiled subset.
+    # Kept even when the listing is empty: it is then the evidence that nothing was
+    # miscompiled, showing what the surviving lines assembled to instead.
+    save_object(work_dir, obj_path, keep=True)
     shutil.rmtree(work_dir, ignore_errors=True)
     print(f'  {arch:<7} {compiler:<9} {os.path.basename(path)}')
 
@@ -218,7 +239,7 @@ def main():
         for compiler in compilers:
             run(arch, compiler, lines, insns, args.work_dir, args.results_dir)
     shutil.rmtree(args.work_dir, ignore_errors=True)
-    print(f'[*] listings written to {args.results_dir}/')
+    print(f'[*] listings and objects written to {args.results_dir}/')
     return 0
 
 

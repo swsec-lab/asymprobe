@@ -2,5 +2,9 @@
 *.txt
 *.o
 *.i
+__pycache__/
 dataset
 output
+experiments/*/results/
+experiments/*/work/
+!experiments/vector_reg_symbol/template.s

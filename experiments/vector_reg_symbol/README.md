@@ -42,6 +42,14 @@ code. Everything else is listed: the name replaced by a register (no relocation)
 extra bytes emitted around the instruction, with any relocation the line did produce
 shown after its disassembly.
 
+The object each listing was read from is kept beside it as
+`results/object_<arch>_<compiler>.o`, so what the assembler actually emitted can be
+inspected directly:
+
+```bash
+objdump -dr -M intel results/object_x86-64_clang-18.o
+```
+
 ## summary.py
 
 Collapses the 22 listings into one table per architecture: a row per register index, a
