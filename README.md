@@ -342,11 +342,17 @@ This command performs the following tasks:
 
 ### 5.2. Running ASymProbe
 
+This step runs ASymProbe over all 11 architectures, both syntaxes (Intel, AT&T) for x86/x86-64, and all 11 compilers, unlike [Section 2.1](#21-running-asymprobe), which covers only the fast-path combinations. As before, the results are written to the `output/` and `report/` directories.
+
+This step is expected to take approximately 12 hours.
+
 ```bash
 make docker-all
 ```
 
 ### 5.3. Summarizing Results
+
+This step summarizes the reports from all architecture/compiler/syntax combinations into the `bugs/` directory, in the same way as [Section 2.2](#22-summarizing-ambiguity-results) but over the full result set.
 
 ```bash
 make docker-triage-all
@@ -376,3 +382,7 @@ The main output directories are:
 - [Section 5](#5-reproducing-the-full-results-optional) (optional) regenerates the instruction templates from scratch and reproduces all 119 combinations evaluated in the paper.
 - The example programs ([Section 3](#3-reproducing-example-programs)) demonstrate the real-world security impact of the detected ambiguities.
 - The patch experiment ([Section 4](#4-reproducing-the-patch-experiment)) validates the proposed mitigation for the detected ambiguities.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
