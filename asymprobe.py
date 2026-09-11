@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""ASymProbe: probe assembly symbol ambiguity across architectures and compilers.
+
+For each (architecture, compiler) pair, a template assembly file containing
+SYMBOL placeholders is compiled twice: once as a ground truth (placeholders
+left as-is) and once with each reserved symbol substituted in. Differences
+between the two builds reveal ambiguity bugs:
+  E1 = miscompilation (both compile, but .text sections differ)
+  E2 = build error (the symbol-substituted version fails to assemble)
+Results are written as report_<arch>[_<syntax>]_<compiler>.txt files.
+"""
 import argparse
 import os
 import re
@@ -13,6 +23,12 @@ _CLANG_VERSIONS = ['clang-14', 'clang-15', 'clang-16', 'clang-17', 'clang-18','c
 _GCC15_UNSUPPORTED = {'mips', 'mips64'}
 
 def _make_arch_compiler_map():
+    """Build {arch: {compiler: command}} for every supported combination.
+
+    GCC cross-compiles via per-target binaries (e.g. aarch64-linux-gnu-gcc-14),
+    while Clang uses a single binary with a --target flag.
+    """
+    # arch -> (gcc binary name template, extra gcc flags, extra clang flags)
     arch_base = {
         'x86':       ('{ver}',                         ['-m32'], ['-m32']),
         'x86-64':    ('{ver}',                         [],       []),
@@ -40,7 +56,10 @@ def _make_arch_compiler_map():
 _ARCH_COMPILER_MAP = _make_arch_compiler_map()
 
 class Mutator:
+    """Rewrites template content: symbol substitution and line disabling."""
+
     def apply_symbol(self, template_content, symbol, error_lines):
+        """Replace SYMBOL placeholders, skipping lines known to fail (1-based)."""
         lines = template_content.split('\n')
         for idx in range(len(lines)):
             if idx + 1 not in error_lines:
@@ -48,6 +67,7 @@ class Mutator:
         return '\n'.join(lines)
 
     def comment_out_lines(self, template_content, error_lines):
+        """Disable the given 1-based lines with a '#' assembly comment."""
         lines = template_content.split('\n')
         for lineno in error_lines:
             idx = lineno - 1
@@ -57,6 +77,8 @@ class Mutator:
 
 
 class Compile:
+    """Base class: assemble a source buffer and extract its .text bytes."""
+
     def __init__(self, architecture, compiler, contents, symbol, compile_dir):
         self.architecture = architecture
         self.compiler = compiler
@@ -69,14 +91,20 @@ class Compile:
         return _ARCH_COMPILER_MAP.get(self.architecture, {}).get(self.compiler, [self.compiler])
 
     def _try_compile(self, src, obj):
-        """Run compiler on src -> obj. Returns (success, new_errors)."""
+        """Run compiler on src -> obj. Returns (success, new_errors).
+
+        new_errors is the list of 1-based source lines the compiler blamed.
+        """
         result = subprocess.run(self._compiler_cmd() + ['-c', src, '-o', obj],
                                 capture_output=True, text=True, check=False)
         if result.returncode == 0:
             return True, []
 
+        # Collect faulting line numbers from '<file>.s:<line>' diagnostics.
         stderr = result.stderr
         new_errors = list(dict.fromkeys(int(m) for m in re.findall(r'\.s:(\d+)', stderr)))
+        # Clang reports undefined temporary symbols without a line number;
+        # map each such symbol back to the source lines that mention it.
         undef_syms = re.findall(r'<unknown>:0: error: Undefined temporary symbol (\S+)', stderr)
         if undef_syms:
             lines = self._contents.split('\n')
@@ -90,6 +118,7 @@ class Compile:
         return False, new_errors
 
     def _extract_text_from_object(self, object_file):
+        """Return the raw .text bytes of an object file as a hex string."""
         try:
             result = subprocess.run(['objdump', '-s', '-j', '.text', object_file],
                                     capture_output=True, text=True, check=True)
@@ -99,6 +128,7 @@ class Compile:
             return None
 
     def _extract_text_section(self, objdump_output):
+        """Parse `objdump -s -j .text` output into a flat hex-byte string."""
         bytes_hex = []
         in_text = False
         for line in objdump_output.split('\n'):
@@ -121,6 +151,8 @@ class Compile:
 
 
 class CompileSym(Compile):
+    """Compiles a symbol-substituted test case (one reserved symbol)."""
+
     def __init__(self, architecture, compiler, contents, symbol, compile_dir):
         super().__init__(architecture, compiler, contents, symbol, compile_dir)
         self.error_line_numbers = []
@@ -128,6 +160,7 @@ class CompileSym(Compile):
         self._obj = None
 
     def compile(self):
+        """Assemble once; on failure record the faulting lines and return False."""
         self._src = os.path.join(self._compile_dir, f"{self._symbol}.s")
         self._obj = os.path.join(self._compile_dir, f"{self._symbol}.o")
 
@@ -147,17 +180,22 @@ class CompileSym(Compile):
 
 
 class CompileGT(Compile):
+    """Compiles the ground-truth template (SYMBOL placeholders untouched)."""
+
     def __init__(self, architecture, compiler, contents, symbol, compile_dir):
         super().__init__(architecture, compiler, contents, symbol, compile_dir)
         self._sym_lines = []
 
     def get_sym_lines(self):
+        """1-based lines that use SYMBOL as an operand (not a label or comment)."""
         if not self._sym_lines:
             self._sym_lines = [i + 1 for i, line in enumerate(self._contents.split('\n'))
                                if 'SYMBOL' in line and not line.lstrip().startswith('#') and 'SYMBOL:' not in line]
         return self._sym_lines
 
     def compile(self, mutator):
+        """Assemble the template, commenting out lines the compiler rejects
+        until it builds cleanly (or fails with no line to remove)."""
         os.makedirs(self._compile_dir, exist_ok=True)
         src = os.path.join(self._compile_dir, f"{self._symbol}.s")
         obj = os.path.join(self._compile_dir, f"{self._symbol}.o")
@@ -185,12 +223,21 @@ class CompileGT(Compile):
 
 
 class Differ:
+    """Classifies each probed symbol as E1 (miscompile) or E2 (build error)."""
+
     def __init__(self, architecture, compiler):
         self.architecture = architecture
         self.compiler = compiler
         self._errors = []
 
     def examine_ambiguity_errors(self, gt, sym, symbol, error_line_numbers):
+        """Compare a successful symbol build against the ground truth.
+
+        Different .text bytes mean the symbol was silently consumed as an
+        operand (E1). Identical bytes but earlier build errors mean some
+        substituted lines had to be skipped (E2). Otherwise the symbol is
+        unambiguous and its artifacts are removed.
+        """
         if gt._text != sym._text:
             self._errors.append((self.architecture, self.compiler, symbol, 'E1'))
         elif error_line_numbers:
@@ -199,6 +246,11 @@ class Differ:
             sym.remove_files()
 
     def had_exception(self, gt, sym, symbol, error_line_numbers):
+        """Decide whether the retry loop should stop after a failed build.
+
+        Returns True (recording E2) when the compiler gave no usable line
+        numbers, or when every SYMBOL-bearing line has already failed.
+        """
         if not sym.error_line_numbers:
             self._errors.append((self.architecture, self.compiler, symbol, 'E2'))
             return True
@@ -208,8 +260,11 @@ class Differ:
         return False
 
 class ASymProbe:
+    """Drives the probing loop over all symbols and compilers for one arch."""
+
     def __init__(self, architecture, patch=False, compilers=None, no_compilers=None, syntax=None):
         self.architecture = architecture
+        # x86/x86-64 default to Intel syntax; other architectures have none.
         if syntax is None and architecture in ('x86', 'x86-64'):
             self.syntax = 'intel'
         else:
@@ -221,7 +276,11 @@ class ASymProbe:
         self._reported_errors = []
         self._patch = patch
 
-    def probe(self, work_dir, report_dir):  # work_dir: directory for compiled files
+    def probe(self, work_dir, report_dir):
+        """Probe every (compiler, symbol) pair and write per-compiler reports.
+
+        work_dir holds compiled test cases; report_dir holds the result files.
+        """
         os.makedirs(work_dir, exist_ok=True)
         os.makedirs(report_dir, exist_ok=True)
 
@@ -255,6 +314,9 @@ class ASymProbe:
 
                 error_line_numbers = []
 
+                # Retry loop: substitute the symbol everywhere except on lines
+                # that already failed, until the test case assembles or every
+                # SYMBOL-bearing line has been ruled out.
                 while True:
                     sym_str = f'"{symbol}"' if self._patch else symbol
                     new_content = mutator.apply_symbol(gt._contents, sym_str, error_line_numbers)
@@ -273,6 +335,7 @@ class ASymProbe:
         print(f"\r[{total}/{total}] 100% - Done.                        ")
 
     def _get_template_file(self, compiler):
+        """Resolve the template path; gcc-N/clang-N share one file per family."""
         template_dir = 'template'
         known = {'x86', 'x86-64', 'aarch64', 'arm', 'm68k', 'mips', 'mips64', 'powerpc64', 'riscv64', 's390x', 'sparc64'}
         if self.architecture not in known:
@@ -290,12 +353,15 @@ class ASymProbe:
 
         with open(template_file, 'r') as f:
             content = f.read()
+        # Intel-syntax templates are stored without the directive; prepend it.
         if self.architecture in ('x86', 'x86-64') and (self.syntax is None or self.syntax == 'intel'):
             content = '.intel_syntax noprefix\n' + content
 
         return content
 
     def _report(self, compiler, output_dir='.'):
+        """Write one report file per (arch, compiler): arch/compiler/syntax/
+        error type (E1|E2)/symbol columns, sorted by error type then symbol."""
         by_compiler = {}
         for arch, comp, symbol, error_type in self._reported_errors:
             if comp == compiler:

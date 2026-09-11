@@ -1,11 +1,13 @@
 """
-Extract assembly instructions from .s files under a build directory.
+Extract instruction templates from the .s files under a build directory.
+
+Every compiler-generated assembly file under build/<arch>[_<syntax>]/<compiler>/
+is scanned; each instruction is normalized (symbol references → SYMBOL,
+immediates → 8) and the deduplicated results are written to a template file
+used by asymprobe.py.
 
 Usage:
-    python extract_instructions.py <arch>
-
-arch: architecture name (e.g. x86, x86-64)
-      looks under build/<arch>/
+    python extract_instructions.py <arch> <compiler> <output> [--syntax intel|att]
 """
 
 import argparse
@@ -31,11 +33,15 @@ def normalize_instruction(instr: str, arch: str = 'x86-64', syntax: str = None) 
     Normalize a single assembly instruction:
       - Symbol / label references  → SYMBOL
       - Immediate / offset integers → 8
+
+    Identifiers that are mnemonics, registers, or local labels must survive
+    unchanged; the per-arch special cases below keep them out of SYMBOL.
     """
     parts = instr.split(None, 1)
     if len(parts) == 1:
         return instr  # mnemonic only, nothing to normalize
 
+    # Identifiers that must never be treated as a symbol reference.
     not_symbol = ASM_KEYWORDS | ARCH_REGISTERS.get(arch, ARCH_REGISTERS['x86-64'])
 
     mnemonic, operands = parts
@@ -49,6 +55,8 @@ def normalize_instruction(instr: str, arch: str = 'x86-64', syntax: str = None) 
 
     def replace_ident(m):
         word = m.group()
+        # Compiler-generated local labels (.L*) are unified to LOCAL; other
+        # dot-prefixed words are directives/operand keywords and kept as-is.
         if word.startswith('.L'):
             return 'LOCAL'
         if word.startswith('.'):
@@ -94,6 +102,8 @@ def normalize_instruction(instr: str, arch: str = 'x86-64', syntax: str = None) 
 
     operands = _IDENT_RE.sub(replace_ident, operands)
 
+    # %SYMBOL / $SYMBOL means a register or immediate got misclassified as a
+    # symbol; warn and keep the original instruction rather than a bad template.
     if "%SYMBOL" in operands or "$SYMBOL" in operands:
         # In AT&T syntax, $SYMBOL is valid (immediate address), so skip the warning
         if not ("$SYMBOL" in operands and syntax == 'att'):
@@ -189,6 +199,8 @@ if __name__ == '__main__':
     total_instructions = 0
     normalized_counts: dict[str, int] = {}
 
+    # Keep only instructions that reference a symbol; only those can be
+    # mutated by ASymProbe. Duplicates across files are counted once.
     for rel_path, instrs in files.items():
         total_instructions += len(instrs)
         for instr in instrs:

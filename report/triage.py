@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Print per-compiler counts of E1 (miscompile) and E2 (build error) entries.
+
+Aggregates one or more ASymProbe report files into the Miscompile/Build
+Error/Total table printed once per architecture during triage.
+"""
 import argparse
 import sys
 from collections import defaultdict
@@ -6,7 +11,7 @@ from pathlib import Path
 
 
 def parse_report(filename):
-    # counts[arch][compiler][error_type] = count
+    """Count report lines by error type: counts[arch][compiler][error_type]."""
     counts = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     with open(filename, 'r') as f:
         for line in f:
@@ -19,7 +24,7 @@ def parse_report(filename):
 
 
 def print_summary(counts, label):
-
+    """Print one Miscompile/Build Error/Total table per architecture."""
     print(f"=== {label} ===")
     header = f"  {'Compiler':<12} {'Miscompile':>9} {'Build Error':>9} {'Total':>7}"
     sep = '-' * len(header)
@@ -42,6 +47,7 @@ def main():
     parser.add_argument('report_files', nargs='+', help='Report file(s) (e.g. report_x86-64_gcc-12.txt)')
     args = parser.parse_args()
 
+    # Merge all report files into one counts structure before printing.
     total = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for filename in args.report_files:
         try:

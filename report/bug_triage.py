@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""Generate per-symbol bug reports for E1 (miscompilation) entries.
+
+For each E1 entry in an ASymProbe report file, the symbol-substituted object
+is disassembled and diffed against the ground-truth object. Every differing
+instruction is written to bugs/<arch>[_<syntax>]/<compiler>/<symbol>.txt as a
+three-column snippet: the original assembly line, what the symbol version
+actually assembled to, and what the ground truth assembled to.
+"""
 import argparse
 import os
 import subprocess
@@ -6,6 +14,7 @@ import sys
 
 
 def parse_report(filename):
+    """Read an ASymProbe report file, keeping only E1 (miscompile) entries."""
     entries = []
     with open(filename, 'r') as f:
         for line in f:
@@ -21,6 +30,7 @@ def parse_report(filename):
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def make_paths(arch, compiler, syntax, symbol, src_dir):
+    """Locate the .s/.o test case and ground-truth object under src_dir."""
     arch_dir = f'{arch}_{syntax}' if syntax != 'None' else arch
     base = os.path.join(src_dir, arch_dir, compiler)
     asm = os.path.join(base, f'{symbol}.s')
@@ -36,17 +46,24 @@ def objdump(path):
 
 
 def text_section_start(lines):
+    """Index of the first instruction line after the '<.text>' header."""
     idx = next((i for i, l in enumerate(lines) if '<.text>' in l), None)
     return idx + 1 if idx is not None else None
 
 
 def normalize(line):
+    """Strip the address column and trailing '#' comment from a disasm line."""
     parts = line.split(None, 1)
     rest = parts[1] if len(parts) > 1 else ''
     return rest.split('#')[0].rstrip()
 
 
 def diff_text_sections(obj_lines, gt_lines):
+    """Diff two disassemblies line by line.
+
+    Returns (start index, [(offset from .text, gt line, obj line)]) for every
+    instruction that differs between ground truth and the symbol version.
+    """
     start = text_section_start(obj_lines)
     if start is None:
         return None, []
@@ -57,6 +74,8 @@ def diff_text_sections(obj_lines, gt_lines):
 
 
 def load_asm_instructions(asm_path):
+    """Load instruction lines from a .s file, dropping directives/labels/comments,
+    so its indices line up with the disassembled instruction offsets."""
     instructions = []
     with open(asm_path, 'r', errors='replace') as f:
         for line in f:
@@ -72,6 +91,8 @@ def load_asm_instructions(asm_path):
 
 
 def format_bug_report(arch, compiler, symbol, diffs, asm_lines):
+    """Render diffs as a re-assemblable snippet with the two disassemblies
+    shown in trailing comment columns."""
     lines = []
     lines.append(f"# {arch} {compiler} {symbol}")
     lines.append(f"# {'asm':<38}  # {'symbol':<40}  | {'ground_truth'}")
@@ -79,6 +100,8 @@ def format_bug_report(arch, compiler, symbol, diffs, asm_lines):
     lines.append('.intel_syntax noprefix')
     for lineno, gt_line, obj_line in diffs:
         asm_line = (asm_lines[lineno] if lineno < len(asm_lines) else '').expandtabs(8)
+        # Lines still holding the SYMBOL placeholder were commented out during
+        # probing, so they carry no substituted-symbol diff worth reporting.
         if 'SYMBOL' in asm_line:
             continue
         lines.append(f"{asm_line:<40}  # {obj_line:<40}  | {gt_line}")
@@ -86,6 +109,7 @@ def format_bug_report(arch, compiler, symbol, diffs, asm_lines):
 
 
 def save_bug_report(arch, compiler, syntax, symbol, content, output_dir):
+    """Write the snippet to <output_dir>/<arch>[_<syntax>]/<compiler>/<symbol>.txt."""
     arch_dir = f'{arch}_{syntax}' if syntax != 'None' else arch
     bug_path = os.path.join(output_dir, arch_dir, compiler, f'{symbol}.txt')
     os.makedirs(os.path.dirname(bug_path), exist_ok=True)
@@ -94,6 +118,7 @@ def save_bug_report(arch, compiler, syntax, symbol, content, output_dir):
 
 
 def triage_report(report_file, output_dir, src_dir):
+    """Process one report file. Returns (reports written, entries skipped)."""
     try:
         entries = parse_report(report_file)
     except FileNotFoundError:

@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
+"""Summarize triaged bug symbols by register category, per compiler.
+
+Reads the per-symbol .txt files that bug_triage.py wrote under
+<base_dir>/<arch>[_<syntax>]/<compiler>/ and prints a table of ambiguous
+symbol counts per register category (16-bit, 32-bit, ..., etc.), one row per
+compiler — the per-architecture breakdown shown in Tables I and IV.
+"""
 import argparse
 import os
 import re
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Category patterns are matched in order; symbols matching none fall into
+# 'etc'. 'Special' covers the pseudo index registers eiz/riz.
 _CATEGORIES = [
     ('16bit',  re.compile(r'^(ax|bx|cx|dx|si|di|sp|bp|r\d+w)$')),
     ('32bit',  re.compile(r'^(eax|ebx|ecx|edx|esi|edi|esp|ebp|r\d+d)$')),
@@ -17,6 +26,7 @@ _CATEGORIES = [
 ]
 
 def classify(keyword):
+    """Map a symbol name to its register category ('etc' if no match)."""
     for cat, pattern in _CATEGORIES:
         if pattern.match(keyword):
             return cat
@@ -74,8 +84,9 @@ def main():
 
     compilers = sorted(data)
     all_keywords = sorted(set().union(*data.values()))
-   
-    # Category count table: rows=compilers, cols=categories
+
+    # Category count table: rows=compilers, cols=categories.
+    # Only categories with at least one symbol across all compilers get a column.
     all_cats = [cat for cat, _ in _CATEGORIES] + ['etc']
     active_cats = [cat for cat in all_cats
                    if any(classify(kw) == cat for kw in set().union(*data.values()))]

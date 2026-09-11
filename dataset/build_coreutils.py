@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
+"""Build Coreutils under every architecture/compiler/PIE/optimization combination.
 
+Each combination is configured and compiled in its own directory under
+dataset/build/, with -save-temps so the generated .s files survive; those
+assembly files are the input for extract_instructions.py. x86/x86-64 builds
+are additionally repeated per assembly syntax (Intel, AT&T).
+"""
 import argparse
 import os
 import subprocess
@@ -18,6 +24,8 @@ ALL_COMPILERS = ['clang', 'gcc']
 ALL_PIE       = ['pie', 'nopie']
 ALL_OPTS      = ['O0', 'O1', 'O2', 'O3', 'Os', 'Ofast']
 
+# GCC cross-compiles via per-target binaries (<gcc_triple>-gcc), Clang via
+# --target=<clang_target>; host_triple feeds configure's --host option.
 _ARCH_MAP = {
     #              gcc_triple                  clang_target              arch_flag  host_triple              extra
     'x86':       (None,                        None,                     '-m32',    'i686-linux-gnu',        ''),
@@ -61,9 +69,17 @@ def resolve_cc(arch: str, compiler: str):
 
 
 def build_flags(arch: str, compiler: str, pie: str, opt: str, syntax: str = 'intel'):
+    """Assemble CC/CFLAGS/LDFLAGS for one build configuration.
+
+    -save-temps keeps the intermediate .s files that the extraction step needs.
+    For Intel syntax, identifiers that collide with Intel-syntax keywords in
+    the Coreutils sources (or, flags, shr, and) are renamed via -D.
+    """
     cc, arch_flag, host_flag = resolve_cc(arch, compiler)
     pie_flag = '-fpie -pie' if pie == 'pie' else '-fno-pie -no-pie'
     asm_flag = '-masm=intel -Dor=_or -Dflags=_flags -Dshr=_shr -Dand=_and' if arch in ('x86', 'x86-64') and syntax == 'intel' else ''
+    # Clang's integrated assembler chokes on 32-bit Intel-syntax output; use
+    # the external assembler instead (and drop .addrsig, which it rejects).
     no_integrated_as = '-fno-integrated-as -fno-addrsig' if compiler.startswith('clang') and arch in ('x86') and syntax == 'intel' else ''
 
     cflags  = ' '.join(filter(None, [f'-{opt}', arch_flag, pie_flag, asm_flag, no_integrated_as,
@@ -73,6 +89,7 @@ def build_flags(arch: str, compiler: str, pie: str, opt: str, syntax: str = 'int
 
 
 def build_one(arch: str, compiler: str, pie: str, opt: str, out_dir: Path, syntax: str = 'intel') -> bool:
+    """Configure and build one combination out-of-tree; log goes to build.log."""
     arch_dir = f'{arch}_{syntax}' if syntax else arch
     build_dir = out_dir / arch_dir / compiler / pie / opt
     build_dir.mkdir(parents=True, exist_ok=True)
