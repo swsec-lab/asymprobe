@@ -231,7 +231,7 @@ make
 Alternatively, each example can be reproduced individually as shown below.
 
 ```bash
-cd examples
+cd examples/
 
 # Case 1: Clang
 docker run --rm -v $PWD:/workspace -w /workspace/case1_clang asymprobe make
