@@ -11,15 +11,14 @@ void write_data(UNIT *buf, int len){
     printf("Write: %d bytes\n", len);
     fwrite(buf, 1, len, stdout);
 }
-void send_data(UNIT *src, long long unit_count, int unit_size) {
+void send_data(UNIT *src, long long unit_count,
+               int unit_size) {
     int len = unit_count * unit_size;
     UNIT *buf = calloc(unit_count, unit_size);
-
-    if (buf) {
-        memcpy(buf, src, len);
-        write_data(buf, len);
-        free(buf);
-    }
+    memcpy(buf, src, len);
+    write_data(buf, len);
+    /* Do something */
+    free(buf);
 }
 int handle_request(char *user) {
     char master_secret[0x100];

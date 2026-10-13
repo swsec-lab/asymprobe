@@ -6,8 +6,7 @@ static unsigned int total = 0x1000;
 static char data[0x1000] = "SESSION_ID=7f3a9c21;...";
 static unsigned int offset = 0x20;
 
-char *read_blob(unsigned int seek, unsigned int size)
-{
+char *read_blob(unsigned int seek, unsigned int size){
     char *tmp;
 
     if (seek < offset || seek + size > total)
