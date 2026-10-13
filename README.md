@@ -166,7 +166,7 @@ bugs/
 
 Each `.txt` file contains example code snippets that trigger ambiguity for the corresponding architecture, compiler, and symbol.
 
-### 2.3. Reproducing the Vector Register Miscompilations 
+### 2.3. Reproducing the Vector Register Miscompilations
 
 [Section 2.2](#22-summarizing-ambiguity-results) reports *how many* symbols are ambiguous. This step reproduces Table V of the paper, which reports *what each ambiguous symbol is silently miscompiled into*: a program symbol named after a vector register (`xmm0`-`xmm31`, `ymm0`-`ymm31`, `zmm0`-`zmm31`) is consumed by the assembler as a register operand, so the memory access the source asked for is replaced by a general-purpose register with no diagnostic.
 
@@ -231,51 +231,53 @@ make
 Alternatively, each example can be reproduced individually as shown below.
 
 ```bash
+cd examples
+
 # Case 1: Clang
-docker run --rm -v /workspace:/workspace -w /workspace/case1_clang asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/case1_clang asymprobe make
 clang -save-temps -masm=intel -no-pie -fno-pie case1_clang.c -o case1_clang
 ./case1_clang
 Capture the Flag
 
 # Case 1: GCC
-docker run --rm -v /workspace:/workspace -w /workspace/case1_gcc asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/case1_gcc asymprobe make
 gcc -masm=intel -pie -fpie case1_gcc.c -o case1_gcc
 ./case1_gcc
 Capture the Flag
 
 # Case 2: Clang
-docker run --rm -v /workspace:/workspace -w /workspace/case2_clang asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/case2_clang asymprobe make
 clang -save-temps -masm=intel -pie -fpie case2_clang.c -o case2_clang
 ./case2_clang
 Capture the Flag
 
 # Case 3: Clang
-docker run --rm -v /workspace:/workspace -w /workspace/case3_clang asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/case3_clang asymprobe make
 clang -save-temps -masm=intel -no-pie -fno-pie case3_clang.c -o case3_clang
 ./case3_clang
 Capture the Flag
 
 # Case 3: GCC 15
-docker run --rm -v /workspace:/workspace -w /workspace/case3_gcc asymprobe:gcc-15 make
+docker run --rm -v $PWD:/workspace -w /workspace/case3_gcc asymprobe:gcc-15 make
 gcc -O2 -m32 -masm=intel -pie -fpie case3_gcc.c -o case3_gcc
 ./case3_gcc
 make: *** [Makefile:7: case3_gcc] Illegal instruction (core dumped)
 make: [Makefile:28: docker-case3_gcc] Error 2 (ignored)
 
 # Example 1
-docker run --rm -v /workspace:/workspace -w /workspace/example1 asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/example1 asymprobe make
 clang -save-temps -masm=intel -pie -fpie example1.c -o example1
 ./example1
 Authentication Success
 
 # Example 2
-docker run --rm -v /workspace:/workspace -w /workspace/example2 asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/example2 asymprobe make
 gcc -masm=intel -m32 -no-pie -fno-pie example2.c -o example2
 ./example2
 SESSION_ID=7f3a9c21;
 
 # Example 3
-docker run --rm -v /workspace:/workspace -w /workspace/example3 asymprobe make
+docker run --rm -v $PWD:/workspace -w /workspace/example3 asymprobe make
 gcc -masm=intel -O1 -pie -fpie -DUNIT_SIZE=BYTE example3.c -o example3
 ./example3
 Write: 4096 bytes
@@ -337,7 +339,7 @@ This command performs the following tasks:
 - Extracts `coreutils-9.7.tar.gz` under the `dataset/` directory
 - Compiles Coreutils using `dataset/build_coreutils.py`
 - Stores intermediate build outputs under `dataset/build/`
-- Extracts instruction templates using `dataset/extract_instruction.py`
+- Extracts instruction templates using `dataset/extract_instructions.py`
 - Writes generated templates to the `template/` directory
 
 ### 5.2. Running ASymProbe
